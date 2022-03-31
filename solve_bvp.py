@@ -23,6 +23,8 @@ class StabilityEvalEnv:
         num_mesh_points: int = 50,
         B: float = 1,
         rho: float = 1,
+        L: float = 1,
+        M: float = 10,
     ):
         """
 
@@ -38,6 +40,10 @@ class StabilityEvalEnv:
             Bending stiffness.
         rho : float
             Density.
+        L : float
+            Max length of snake.
+        M : float
+            Max torque allowed.
 
         """
         self.ma = ma
@@ -49,7 +55,10 @@ class StabilityEvalEnv:
         self.make_initial_guesses()
         self.B = B
         self.rho = rho
+        self.L = L
+        self.M = M
         self.g = 9.8
+        self.lg = self.B / (self.rho * self.g) ** (1 / 3)
 
     def make_initial_guesses(self):
         """
@@ -117,6 +126,12 @@ class StabilityEvalEnv:
         return residuals
 
     def solve(self):
+        """
+        Solve the system of equations.
+
+        As well as solve we save the solution in the sol attribute and compute
+        x(stilde) and y(stilde).
+        """
         self.sol = si.solve_bvp(self.fun, self.bc, self.x, self.y, p=[self.l])
         self.x_pos = self.sol.p[0] * si.cumtrapz(np.cos(self.sol.y[0]), self.sol.x)
         self.x_pos -= self.x_pos[-1]
@@ -136,15 +151,58 @@ class StabilityEvalEnv:
         active_moment = self.ma(r)
         work = 0.5 * si.trapz(active_moment * dtheta_dr, r)
         height = self.y_pos[0]
-        cost = (1 - alpha) * work - alpha * height
+        cost = (1 - alpha) * work * self.sol.p[
+            0
+        ] / self.B - alpha * height / self.sol.p[0]
         return cost
 
+    def check_length(self) -> bool:
+        """
+        Check that the length constraint is satisfied.
+
+        Return True if satisfied. False otherwise.
+        """
+        l = self.sol.p[0]
+        return l < self.L
+
+    def check_torque_mag(self) -> bool:
+        """
+        Check that the torque magnitude constraint is satisfied.
+
+        Return True if satisfied. False otherwise.
+        """
+        elastic = (
+            self.B * self.sol.y[1] * self.sol.p[0]
+        )  # add in l factor to get back dtheta/ds
+        r = self.sol.x
+        active = self.ma(r)
+        total = elastic + active
+        return np.all(total < self.M).item()
+
+    def check_constraints(self):
+        """
+        Check that all constraints are satisfied.
+
+        Return True if all are satisfied. False otherwise.
+        """
+        length = self.check_length()
+        magnitude = self.check_torque_mag()
+        return length and magnitude
+
     def plot_snake(self):
+        """
+        Plot what we get for the shape of the snake.
+        """
         plt.plot(self.x_pos, self.y_pos)
         plt.title("Snake layout")
+        plt.xlabel("x")
+        plt.ylabel("y")
         plt.show()
 
     def plot_solutions(self):
+        """
+        Plot the solutions for theta and dtheta/dr (r is s tilde).
+        """
         plt.plot(self.sol.x, self.sol.y[0], label=r"$\theta$")
         plt.plot(self.sol.x, self.sol.y[1], label=r"$\frac{d\theta}{d\tilde{s}}$")
         plt.xlabel(r"$\tilde{s}$")
