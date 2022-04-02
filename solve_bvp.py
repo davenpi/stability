@@ -158,12 +158,12 @@ class StabilityEvalEnv:
 
     def check_length(self) -> bool:
         """
-        Check that the length constraint is satisfied.
+        Check that the length constraints are satisfied.
 
         Return True if satisfied. False otherwise.
         """
         l = self.sol.p[0]
-        return l < self.L
+        return l < self.L and l > 0
 
     def check_torque_mag(self) -> bool:
         """
@@ -179,6 +179,12 @@ class StabilityEvalEnv:
         total = elastic + active
         return np.all(total < self.M).item()
 
+    def check_deriv_at_contact(self):
+        """
+        Check that the derivative at s = l is positive.
+        """
+        return self.sol.y[1][-1] >= 0
+
     def check_constraints(self):
         """
         Check that all constraints are satisfied.
@@ -187,7 +193,8 @@ class StabilityEvalEnv:
         """
         length = self.check_length()
         magnitude = self.check_torque_mag()
-        return length and magnitude
+        derivative = self.check_deriv_at_contact()
+        return length and magnitude and derivative
 
     def plot_snake(self):
         """
