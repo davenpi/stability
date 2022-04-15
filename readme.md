@@ -1,2 +1,2 @@
-All results so far are in the "curvature_parametrized_torque" notebook. I'll clean this up more and move it all to scripts as we go along.
+Code to solve the equilibrium equation for the snake. Check the "looking_up" notebook to find the snake solved for the case when it is looking up at it's tip.
 
