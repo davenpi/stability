@@ -1,3 +1,7 @@
+*.mp4
+*.tif
+*.png
+*.jpg
 *.DS_Store
 venv/
 *__pycache__/
