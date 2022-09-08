@@ -1,0 +1,12 @@
+# Get the length of the video in seconds
+
+ffprobe -i clipped_70.mov -show_entries format=duration -v quiet -of csv="p=0"
+
+# Downsample the video a reasonable size (need to divide the width by 2 several times)
+
+ffmpeg -i clipped_70.mov -vf scale=540:-1 down.mov
+
+# Take still images from video every 'n' second:
+
+ffmpeg -i input.mov -r n  output_%04d.png
+

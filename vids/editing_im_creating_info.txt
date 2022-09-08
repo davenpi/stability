@@ -1,0 +1,3 @@
+- Rotate the video
+- down sample to 540x960
+- sample for images at 3 Hz

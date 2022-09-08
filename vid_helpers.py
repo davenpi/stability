@@ -106,7 +106,53 @@ def extract_front(cropped: np.ndarray) -> np.ndarray:
     front = np.array(list(zip(columns, rows)))
     return front
 
+def extract_bottom(cropped: np.ndarray):
+    """
+    Exctract a line describing the bottom of the snake.
 
+    Extract the back of the snake from the image and return the pixel values
+    describing the extracted shape.
+
+    Parameters
+    ----------
+    cropped : np.ndarray
+        A cropped image of the snake.
+
+    Returns
+    -------
+    back : np.ndarray
+        A 2D array holding the x, y pixel values of the back of the snake.
+    """
+    rows = []
+    columns = []
+    for i in range(cropped.shape[1]):
+        if np.any(cropped[:, i]):
+            col_idx = i
+            columns.append(col_idx)
+            row_idx = np.where(cropped[:, i])[0][-1]
+            rows.append(row_idx)
+    rows = np.array(rows)
+    columns = np.array(columns)
+    bottom = np.array(list(zip(columns, rows)))
+    return bottom
+
+def hybridize(front: np.ndarray, bottom: np.ndarray)-> np.ndarray:
+    """
+    Smartly combine the images of the front and the bottom.
+    """
+    sorted_front = np.sort(front, axis=0)
+    tip_y = sorted_front[0][1]
+    base_y = sorted_front[-1][1]
+    # First deal with downward leaning snake
+    if tip_y > base_y:
+        hybrid = bottom
+    # otherwise use simple hybrid algorithm
+    else:
+        bot_cols = bottom[:, 0]
+        extra_cols = list(np.where(bot_cols > np.amax(front[:, 0]))[0])
+        extra_bit = bottom[extra_cols]
+        hybrid = np.vstack((front, extra_bit))
+    return hybrid
 def plot_outline(cropped: np.ndarray, outline: np.ndarray, size: int = 6) -> None:
     """
     Plot an outline of the shape of the snake.
