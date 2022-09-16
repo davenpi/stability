@@ -21,7 +21,11 @@ parser.add_argument(
 # cal_dict will hold the pixel per cm value from a downsampled video for each
 # calibration. The video must be rotated and then downsampled to 540:-1 for
 # the calibration number to make sense.
-cal_dict = {8: 8.5758}
+
+python_cal_dict = {
+    8: 8.5758
+}  # means for cal 8 the pix per cm is 8.5 etc. FOR THE PYTHON
+bi_cal_dict = {6: 18, 8: 17}
 args = parser.parse_args()
 ims_path = args.ims_path
 px_per_cm = args.px_per_cm
@@ -30,7 +34,7 @@ os.mkdir(
     save_folder,
 )
 
-print(px_per_cm)
+print(f"{px_per_cm}")
 
 
 files = []
@@ -58,7 +62,7 @@ for im_file in files:
     img = vh.load_img(img_path=im_file)
     front = vh.extract_front(img)
     bottom = vh.extract_bottom(img)
-    hybrid = vh.hybridize(front, bottom)
+    hybrid = vh.hybridize(img, front, bottom)
     distance = vh.get_distance_parameter(outline=hybrid, px_per_cm=px_per_cm)
     interpolated_line, interpolator = vh.get_interpolation(
         distance, hybrid, num_points=15
@@ -67,11 +71,17 @@ for im_file in files:
     smooth_kappa, smooth_points = vh.compute_curvature(
         interpolated_line, interpolation_points
     )
+    ratio = vh.get_height_length_ratio(
+        distance_param=distance,
+        interpolated_line=interpolated_line,
+        px_per_cm=px_per_cm,
+    )
     np.savez(
         save_folder + f"/im{i}",
         img,
         interpolated_line,
         smooth_points,
         smooth_kappa,
+        [ratio],
     )
     i += 1

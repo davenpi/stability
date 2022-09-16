@@ -106,6 +106,7 @@ def extract_front(cropped: np.ndarray) -> np.ndarray:
     front = np.array(list(zip(columns, rows)))
     return front
 
+
 def extract_bottom(cropped: np.ndarray):
     """
     Exctract a line describing the bottom of the snake.
@@ -136,23 +137,100 @@ def extract_bottom(cropped: np.ndarray):
     bottom = np.array(list(zip(columns, rows)))
     return bottom
 
-def hybridize(front: np.ndarray, bottom: np.ndarray)-> np.ndarray:
+
+def lean_down(front):
+    # front case
+    top_x = front[0][1]
+    bottom_x = front[-1][1]
+    front_says_down = top_x > bottom_x
+    return front_says_down
+
+
+def leaning_back(cropped):
+    """
+    Determine if snake is leaning backwards in an image.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Image of snake
+
+    Returns
+    -------
+    leaning_back : bool
+        True or False depending on if snake is leaning backwards or not.
+    """
+    # first scan over rows
+    rows = []
+    columns = []
+    for i in range(cropped.shape[0]):
+        if np.any(cropped[i]):
+            row_idx = i
+            rows.append(row_idx)
+            column_idx = np.where(cropped[i])[0][-1]
+            columns.append(column_idx)
+    rows = np.array(rows)
+    columns = np.array(columns)
+    last_row_front = rows[-1]
+
+    # now scan over columns
+    rows = []
+    columns = []
+    for i in range(cropped.shape[1]):
+        if np.any(cropped[:, i]):
+            col_idx = i
+            columns.append(col_idx)
+            row_idx = np.where(cropped[:, i])[0][-1]
+            rows.append(row_idx)
+    rows = np.array(rows)
+    columns = np.array(columns)
+    last_row_bottom = rows[-1]
+
+    diff = abs(last_row_front - last_row_bottom)
+    if diff > 20:
+        leaning_back = True
+    else:
+        leaning_back = False
+    return leaning_back
+
+
+def hybridize(img: np.ndarray, front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
     """
     Smartly combine the images of the front and the bottom.
+
+    If the snake is leaning down, use the bottom outline. Otherwise
+    combine the front and the bottom for a full view.
     """
-    sorted_front = np.sort(front, axis=0)
-    tip_y = sorted_front[0][1]
-    base_y = sorted_front[-1][1]
+
+    # front case
+    front_says_down = lean_down(front)
+
+    # # bottom case
+    # tip_y = bottom[0][1]
+    # base_y = bottom[-1][1]
+    # bottom_says_down = tip_y > base_y
+
+    # check if the snake is leaning backwards
+    lean_back = leaning_back(img)
+
     # First deal with downward leaning snake
-    if tip_y > base_y:
+    if front_says_down:
         hybrid = bottom
+
+    # use the front of the snake if it's leaning backwards
+    elif lean_back:
+        hybrid = front
+
     # otherwise use simple hybrid algorithm
     else:
         bot_cols = bottom[:, 0]
         extra_cols = list(np.where(bot_cols > np.amax(front[:, 0]))[0])
         extra_bit = bottom[extra_cols]
         hybrid = np.vstack((front, extra_bit))
+
     return hybrid
+
+
 def plot_outline(cropped: np.ndarray, outline: np.ndarray, size: int = 6) -> None:
     """
     Plot an outline of the shape of the snake.
@@ -171,6 +249,17 @@ def plot_outline(cropped: np.ndarray, outline: np.ndarray, size: int = 6) -> Non
     plt.imshow(cropped, cmap="gray")
     plt.scatter(outline[:, 0], outline[:, 1], s=2, color="red")
     plt.show()
+
+
+def get_height_length_ratio(
+    distance_param: np.ndarray, interpolated_line: np.ndarray, px_per_cm: float
+):
+    head_y = interpolated_line[0, 1]
+    base_y = interpolated_line[-1, 1]
+    height = np.abs(head_y - base_y) / px_per_cm
+    length = distance_param[-1]
+    ratio = height / length
+    return ratio
 
 
 def get_distance_parameter(outline, px_per_cm=36.4):
