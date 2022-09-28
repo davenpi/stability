@@ -138,63 +138,83 @@ def extract_bottom(cropped: np.ndarray):
     return bottom
 
 
-def lean_down(front):
-    # front case
-    top_x = front[0][1]
-    bottom_x = front[-1][1]
-    front_says_down = top_x > bottom_x
+def leaning_down(front):
+    """
+    Is the snake leaning down according to the front outline.
+    """
+    top_y = front[0][1]
+    bottom_y = front[-1][1]
+    front_says_down = top_y < bottom_y
     return front_says_down
 
 
-def leaning_back(cropped):
+def leaning_down(front, bottom):
     """
-    Determine if snake is leaning backwards in an image.
-
-    Parameters
-    ----------
-    img : np.ndarray
-        Image of snake
-
-    Returns
-    -------
-    leaning_back : bool
-        True or False depending on if snake is leaning backwards or not.
+    Is the snake leaning down according to the front outline.
     """
-    # first scan over rows
-    rows = []
-    columns = []
-    for i in range(cropped.shape[0]):
-        if np.any(cropped[i]):
-            row_idx = i
-            rows.append(row_idx)
-            column_idx = np.where(cropped[i])[0][-1]
-            columns.append(column_idx)
-    rows = np.array(rows)
-    columns = np.array(columns)
-    last_row_front = rows[-1]
-
-    # now scan over columns
-    rows = []
-    columns = []
-    for i in range(cropped.shape[1]):
-        if np.any(cropped[:, i]):
-            col_idx = i
-            columns.append(col_idx)
-            row_idx = np.where(cropped[:, i])[0][-1]
-            rows.append(row_idx)
-    rows = np.array(rows)
-    columns = np.array(columns)
-    last_row_bottom = rows[-1]
-
-    diff = abs(last_row_front - last_row_bottom)
-    if diff > 20:
-        leaning_back = True
+    leaning_back = leaning_backwards(bottom=bottom)
+    tilted_up = tilted_high(front=front)
+    if leaning_back or tilted_up:
+        down = False
     else:
-        leaning_back = False
+        top_x = front[0][0]
+        bottom_x = front[-1][0]
+        x_says_down = top_x > bottom_x
+        down = x_says_down
+    return down
+
+
+def tilted_high(front, tilt_px=250):
+    """
+    Is the snake reaching up high? Measure the distance between the lowest
+    and highest point of the snake and check if it is above a (hand chosen)
+    threshold.
+    """
+    highest_point = front[:, 1].min()
+    lowest_point = front[:, 1].max()
+    diff = lowest_point - highest_point
+    tilted = diff > tilt_px
+    return tilted
+
+
+def leaning_backwards(bottom):
+    """
+    Tell if the snake is leaning backwards i.e if some part of it's upper
+    body is behind the point of departure.
+    """
+    bot_rows = bottom[:, 1]
+    row_diffs = np.diff(bot_rows)
+    leaning_back = np.any(row_diffs < -5)
     return leaning_back
 
 
-def hybridize(img: np.ndarray, front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
+def leaning_fill_gap(front, bottom):
+    """
+    If the snake is bent back with some of it's back hanging
+    over the base, don't just use the front as the outline but
+    supplement it with some of the bits from the back. Just need
+    to take care to not inclcude the high up parts on the back of
+    the snake and only include the parts from the base that the
+    front does not capture.
+    """
+    dec_bot = []  # selects the points where i know im on the bottom
+    for i in range(bottom.shape[0]):
+        diff = bottom[i + 1, 1] - bottom[i, 1]
+        if diff < -5:
+            dec_bot.append(bottom[i])
+            break
+        else:
+            dec_bot.append(bottom[i])
+
+    # selects the points where we don't have any front coverage
+    spec_bot = np.array([tup for tup in dec_bot if tup[0] > front[-10:, 0].max()])
+    spec_hybrid = np.vstack((front, spec_bot))
+    return spec_hybrid
+
+
+def hybridize(
+    img: np.ndarray, front: np.ndarray, bottom: np.ndarray, reaching_num: int
+) -> np.ndarray:
     """
     Smartly combine the images of the front and the bottom.
 
@@ -202,32 +222,28 @@ def hybridize(img: np.ndarray, front: np.ndarray, bottom: np.ndarray) -> np.ndar
     combine the front and the bottom for a full view.
     """
 
-    # front case
-    front_says_down = lean_down(front)
-
-    # # bottom case
-    # tip_y = bottom[0][1]
-    # base_y = bottom[-1][1]
-    # bottom_says_down = tip_y > base_y
-
-    # check if the snake is leaning backwards
-    lean_back = leaning_back(img)
+    front_says_down = leaning_down(front, bottom)
+    leaning = leaning_backwards(bottom)
+    reaching_high = tilted_high(front, tilt_px=reaching_num)
 
     # First deal with downward leaning snake
-    if front_says_down:
+    if front_says_down or not reaching_high:
         hybrid = bottom
-
-    # use the front of the snake if it's leaning backwards
-    elif lean_back:
-        hybrid = front
-
+        return hybrid
+    elif leaning:
+        try:
+            hybrid = leaning_fill_gap(front=front, bottom=bottom)
+            return hybrid
+        except:
+            # print("there was a problem with the hybridization")
+            hybrid = front
+            return hybrid
     # otherwise use simple hybrid algorithm
     else:
         bot_cols = bottom[:, 0]
         extra_cols = list(np.where(bot_cols > np.amax(front[:, 0]))[0])
         extra_bit = bottom[extra_cols]
         hybrid = np.vstack((front, extra_bit))
-
     return hybrid
 
 
@@ -448,9 +464,13 @@ def compute_curvature(
     kappa = np.abs(dx_dt * d2y_dt - d2x_dt * dy_dt) / (
         np.power(dx_dt**2 + dy_dt**2, 3 / 2)
     )
-    smooth_interp = interp1d(interpolation_points, kappa, kind="cubic")
+    smooth_interp = interp1d(
+        interpolation_points, kappa, kind="cubic", fill_value=0, bounds_error=False
+    )
     smooth_points = np.linspace(
-        interpolation_points.min(), interpolation_points.max(), 100
+        interpolation_points.min(),
+        interpolation_points.max(),
+        100,
     )
     smooth_kappa = smooth_interp(smooth_points)
-    return smooth_kappa, smooth_points
+    return smooth_kappa, smooth_points, smooth_interp
