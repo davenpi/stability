@@ -29,7 +29,7 @@ args = parser.parse_args()
 ims_path = args.ims_path
 px_per_cm = args.px_per_cm
 reaching_px = args.reaching_num
-save_folder = ims_path + "/extracted_data"
+save_folder = ims_path + "/extracted_data_signed"  # add in signed curvature
 os.mkdir(
     save_folder,
 )
@@ -54,7 +54,7 @@ files = sorted(files, key=extract_nums_from_str)
 
 i = 0
 for im_file in files:
-    os.mkdir(ims_path + f"/extracted_data/{i}")
+    os.mkdir(ims_path + f"/extracted_data_signed/{i}")
     img = vh.load_img(img_path=im_file)
     front = vh.extract_front(img)
     bottom = vh.extract_bottom(img)

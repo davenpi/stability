@@ -9,6 +9,8 @@ import os
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm
+import copy
 
 parser = argparse.ArgumentParser()
 
@@ -47,18 +49,44 @@ curve_mat = np.vstack(curve_preds)
 plt.figure(figsize=(10, 10))
 skip = int(curve_mat.shape[0] * 0.1)
 skppd = curve_mat[skip:]
+
+
+def replace_with_nan_flip(curve_mat: np.ndarray):
+    """
+    Find where the interpolation went out of range and just predicted all zeros.
+    Replace the zero values with Nans. Also flip the matrix before we get to
+    that point so the base is always the leftmost part of the frame.
+    """
+    i = 0
+    for row in curve_mat:
+        try:  # assuming there are no interpolated zero values. might fail with negative curvature
+            zero_idx = np.argwhere(row == 89)[0][0]
+            row[zero_idx:] = np.nan
+            pre_zero = copy.deepcopy(row[:zero_idx])
+            flip_pre_zero = np.flip(pre_zero)
+            row[:zero_idx] = flip_pre_zero
+        except:  # deal with the case wehre there are no zeros
+            curve_mat[i] = np.flip(curve_mat[i])
+        i += 1
+    return curve_mat
+
+
+skppd = replace_with_nan_flip(skppd)
+
 plt.imshow(
     skppd,
     interpolation=None,
     cmap="viridis",
     aspect="auto",
     origin="lower",
-    extent=[0, 100, 0, skppd.shape[0]],
+    extent=[0, 1, 0, 1],
 )
-plt.clim(vmin=0, vmax=0.2)
+plt.clim(vmax=0.2)
+current_cmap = matplotlib.cm.get_cmap()
+current_cmap.set_bad(color="white")
 plt.colorbar()
-plt.xlabel("Percent along length of snake")
-plt.ylabel("Frame #")
+plt.xlabel(r"$\frac{l}{l_{final}}$", fontsize=16)
+plt.ylabel(r"$\frac{t}{t_{final}}$", fontsize=16)
 plt.title("Curvature (1/cm) along snake over time", fontsize=20)
 # plt.show()
 os.mkdir(plot_path)

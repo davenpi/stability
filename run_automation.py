@@ -62,7 +62,7 @@ for vid_dir in vid_dirs:
             "python3",
             "new_post_process.py",
             "-p",
-            vid_dir + "/full_processed/extracted_data",
+            vid_dir + "/full_processed/extracted_data_signed",
         ]
     )
 

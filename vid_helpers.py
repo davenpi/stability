@@ -447,6 +447,8 @@ def compute_curvature(
         A 2D array containing the x, y pixel values of the interpolation.
     interpolation_points : np.ndarray
         Array containing the points we will do the interpolation at.
+    px_per_cm : float
+        Number of pixels per centimeter in the video.
 
     Returns
     -------
@@ -464,8 +466,11 @@ def compute_curvature(
     kappa = np.abs(dx_dt * d2y_dt - d2x_dt * dy_dt) / (
         np.power(dx_dt**2 + dy_dt**2, 3 / 2)
     )
+    # kappa = (dx_dt * d2y_dt - d2x_dt * dy_dt) / (
+    #     np.power(dx_dt**2 + dy_dt**2, 3 / 2)
+    # )  # move to computing signed curvature
     smooth_interp = interp1d(
-        interpolation_points, kappa, kind="cubic", fill_value=0, bounds_error=False
+        interpolation_points, kappa, kind="cubic", fill_value=89, bounds_error=False
     )
     smooth_points = np.linspace(
         interpolation_points.min(),
