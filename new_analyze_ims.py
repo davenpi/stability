@@ -52,6 +52,7 @@ def extract_nums_from_str(string: str) -> int:
 
 files = sorted(files, key=extract_nums_from_str)
 
+# Add tqdm for feedback
 i = 0
 for im_file in files:
     os.mkdir(ims_path + f"/extracted_data_signed/{i}")

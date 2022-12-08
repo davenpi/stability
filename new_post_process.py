@@ -18,9 +18,12 @@ parser.add_argument(
     "-p", "--data_path", help="path of folder containing data", type=str
 )
 
+parser.add_argument("-w", "--width", help="Width of snake in cm", type=float)
+
 args = parser.parse_args()
 data_path = args.data_path
 plot_path = data_path + "/plots"
+width = args.width
 
 
 folders = os.listdir(data_path)
@@ -74,20 +77,21 @@ def replace_with_nan_flip(curve_mat: np.ndarray):
 skppd = replace_with_nan_flip(skppd)
 
 plt.imshow(
-    skppd,
+    width * skppd,
     interpolation=None,
     cmap="viridis",
     aspect="auto",
     origin="lower",
     extent=[0, 1, 0, 1],
 )
-plt.clim(vmax=0.2)
-current_cmap = matplotlib.cm.get_cmap()
+plt.clim(vmin=-0.25, vmax=0.25)
+current_cmap = matplotlib.cm.get_cmap().copy()
 current_cmap.set_bad(color="white")
-plt.colorbar()
+clb = plt.colorbar()
+clb.ax.set_ylabel(r"$\frac{\kappa}{\kappa_0}$", fontsize=16)
 plt.xlabel(r"$\frac{l}{l_{final}}$", fontsize=16)
 plt.ylabel(r"$\frac{t}{t_{final}}$", fontsize=16)
-plt.title("Curvature (1/cm) along snake over time", fontsize=20)
+plt.title("Curvature along snake over time", fontsize=20)
 # plt.show()
 os.mkdir(plot_path)
 plt.savefig(plot_path + "/new_kymograph.png")

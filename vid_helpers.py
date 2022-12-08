@@ -463,12 +463,12 @@ def compute_curvature(
     dy_dt = np.gradient(y, spacing)
     d2x_dt = np.gradient(dx_dt, spacing)
     d2y_dt = np.gradient(dy_dt, spacing)
-    kappa = np.abs(dx_dt * d2y_dt - d2x_dt * dy_dt) / (
-        np.power(dx_dt**2 + dy_dt**2, 3 / 2)
-    )
-    # kappa = (dx_dt * d2y_dt - d2x_dt * dy_dt) / (
+    # kappa = np.abs(dx_dt * d2y_dt - d2x_dt * dy_dt) / (
     #     np.power(dx_dt**2 + dy_dt**2, 3 / 2)
-    # )  # move to computing signed curvature
+    # )
+    kappa = (dx_dt * d2y_dt - d2x_dt * dy_dt) / (
+        np.power(dx_dt**2 + dy_dt**2, 3 / 2)
+    )  # move to computing signed curvature
     smooth_interp = interp1d(
         interpolation_points, kappa, kind="cubic", fill_value=89, bounds_error=False
     )

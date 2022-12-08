@@ -13,7 +13,7 @@ for file in os.listdir(rootdir):
 
 print(snake_dirs)
 
-print("\n Now printing sub directories \n")
+# print("\n Now printing sub directories \n")
 vid_dirs = []
 # Now for each of these directories loop and get all video directories
 for directory in snake_dirs:
@@ -32,16 +32,24 @@ def get_calibration(directory):
 
 python_cal = {8: 8.7, 9: 9.9}
 bi_cal = {6: 18, 8: 17}
+width_dict = {"py": 1.9, "20": 3.4, "23": 3.4, "26": 3.1}
 
 # print(vid_dirs)
 # now loop throught the tree snake vids and run the analyze_ims code on it.
 for vid_dir in vid_dirs:
     if "python" in vid_dir:
         cal_dict = python_cal
+        width = width_dict["py"]
     else:
         cal_dict = bi_cal
     cal = get_calibration(directory=vid_dir)
     px_per_cm = cal_dict[cal]
+    if "20" in vid_dir:
+        width = width_dict["20"]
+    elif "23" in vid_dir:
+        width = width_dict["23"]
+    elif "26" in vid_dir:
+        width = width_dict["26"]
     with open(vid_dir + "/reaching_num.txt") as f:
         reaching_num = f.readlines()[0]
 
@@ -63,6 +71,8 @@ for vid_dir in vid_dirs:
             "new_post_process.py",
             "-p",
             vid_dir + "/full_processed/extracted_data_signed",
+            "-w",
+            f"{width}",
         ]
     )
 
