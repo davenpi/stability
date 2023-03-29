@@ -1,7 +1,9 @@
 """
+DOES NOT WORK. NEED TO GO ONE LEVEL DEEPER IN FILE STRUCTURE. DOESN'T MATTER
+SINCE I AM MAKING KYMOGRAPHS IN JUPYTER NOTEBOOKS FOR NOW.
 This script is used to analyze the extracted data. The point is to make the
 kymograph, curvature time lapse plot, and the plot of the height/length ratio
-over time
+over time.
 """
 
 import argparse
@@ -9,6 +11,7 @@ import os
 import re
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 parser = argparse.ArgumentParser()
 
@@ -18,9 +21,11 @@ parser.add_argument(
 
 args = parser.parse_args()
 data_path = args.data_path
+print("Data path is " + data_path)
 plot_path = data_path + "/plots"
 
 os.mkdir(plot_path)
+
 
 files = []
 for filename in os.listdir(data_path):
@@ -36,6 +41,7 @@ def extract_num_from_npy_string(string):
 
 
 fnames = sorted(files, key=extract_num_from_npy_string)
+
 
 # format is image, interpolated line, interpolation points, curvature, and
 # height/length values.
@@ -60,22 +66,10 @@ for i in range(n_ims):
     frmi = list(zip(interpolation_points[i], curvatures[i]))
     frms_list.append(frmi)
 
-# DON'T THINK THIS ACTUALLY WORKS
-def deal_with_zero_dup(tup_list: list, arr_idx: int, n_ims: int) -> list:
-    """
-    Drop the tuples which duplicate zero starting elements
 
-    Just gets rid of duplicates in the list and makes interpolation easier.
-    In general this is a dirty method but it's better than nothing.
-    """
-    zero_start_list = [i for i in tup_list if i[0] == 0.0]
-    tup_list = tup_list[n_ims:]  # ignore the first n_ims things
-    tup = zero_start_list[arr_idx]
-    tup_list.insert(0, tup)
-    return tup_list
-
-
-# Do the padding.
+# Do the padding. I need to do this because the snake is different lengths in
+# different frames. I set curvature values beyond the current length equal to
+# zero
 zeros_list = np.zeros(100)
 padded_frames = []
 for i in range(n_ims):
@@ -86,7 +80,6 @@ for i in range(n_ims):
         zipped = list(zip(interpolation_points[idx], zeros_list))
         frmi.extend(zipped)
     frmi.sort(key=lambda el: el[0])
-    # frmi = deal_with_zero_dup(frmi, i, n_ims)
     padded_frames.append(frmi)
 
 # extract the extended curvatures

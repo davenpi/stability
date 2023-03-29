@@ -60,7 +60,7 @@ def load_img(img_path: str) -> np.ndarray:
     return img
 
 
-def make_truly_bw(img):
+def make_truly_bw(img: np.ndarray) -> np.ndarray:
     """
     Force all pixels to be black or white.
 
@@ -103,7 +103,7 @@ def extract_front(cropped: np.ndarray) -> np.ndarray:
             columns.append(column_idx)
     rows = np.array(rows)
     columns = np.array(columns)
-    front = np.array(list(zip(columns, rows)))
+    front = np.array(list(zip(columns, rows)), dtype=np.float32)
     return front
 
 
@@ -122,7 +122,7 @@ def extract_bottom(cropped: np.ndarray):
     Returns
     -------
     back : np.ndarray
-        A 2D array holding the x, y pixel values of the back of the snake.
+        A 2D array holding the x, y pixel values of the bottom of the snake.
     """
     rows = []
     columns = []
@@ -134,7 +134,7 @@ def extract_bottom(cropped: np.ndarray):
             rows.append(row_idx)
     rows = np.array(rows)
     columns = np.array(columns)
-    bottom = np.array(list(zip(columns, rows)))
+    bottom = np.array(list(zip(columns, rows)), dtype=np.float32)
     return bottom
 
 
@@ -177,7 +177,7 @@ def tilted_high(front, tilt_px=250):
     return tilted
 
 
-def leaning_backwards(bottom):
+def leaning_backwards(bottom: np.ndarray):
     """
     Tell if the snake is leaning backwards i.e if some part of it's upper
     body is behind the point of departure.
@@ -188,14 +188,32 @@ def leaning_backwards(bottom):
     return leaning_back
 
 
-def leaning_fill_gap(front, bottom):
+def leaning_fill_gap(front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
     """
+    Check if the snake is leaning backwards and hybridize appropriately.
+
     If the snake is bent back with some of it's back hanging
     over the base, don't just use the front as the outline but
-    supplement it with some of the bits from the back. Just need
-    to take care to not inclcude the high up parts on the back of
-    the snake and only include the parts from the base that the
-    front does not capture.
+    supplement it with some of the bits from the back. We just need to take
+    care to not include any of the back in the outline. That is what the
+    'break' statement does in the for loop. We break out of the loop if we
+    encounter a place where the snake is leaning backwards. Currently I am
+    checking if it is leaning backwards if there is a 5 px difference in
+    consecutive y-values (i.e scanning from left to right the y value on the
+    right is 5 pixels higher than the one it is next to.)
+
+    Parameters
+    ----------
+    front : np.ndarray
+        2D array containing the outline of the front of the snake.
+    bottom : np.ndarray
+        2D array containing the outline of the bottom of the snake.
+
+    Returns
+    -------
+    hybrid : np.ndarray
+        2D array containing an outline which combines the front and bottom
+        outlines.
     """
     dec_bot = []  # selects the points where i know im on the bottom
     for i in range(bottom.shape[0]):
@@ -208,13 +226,11 @@ def leaning_fill_gap(front, bottom):
 
     # selects the points where we don't have any front coverage
     spec_bot = np.array([tup for tup in dec_bot if tup[0] > front[-10:, 0].max()])
-    spec_hybrid = np.vstack((front, spec_bot))
-    return spec_hybrid
+    hybrid = np.vstack((front, spec_bot))
+    return hybrid
 
 
-def hybridize(
-    img: np.ndarray, front: np.ndarray, bottom: np.ndarray, reaching_num: int
-) -> np.ndarray:
+def hybridize(front: np.ndarray, bottom: np.ndarray, reaching_num: int) -> np.ndarray:
     """
     Smartly combine the images of the front and the bottom.
 
@@ -229,21 +245,24 @@ def hybridize(
     # First deal with downward leaning snake
     if front_says_down or not reaching_high:
         hybrid = bottom
+        print("using bottom")
         return hybrid
     elif leaning:
         try:
             hybrid = leaning_fill_gap(front=front, bottom=bottom)
             return hybrid
         except:
-            # print("there was a problem with the hybridization")
             hybrid = front
+            print("Hit exception and using front.")
             return hybrid
     # otherwise use simple hybrid algorithm
     else:
         bot_cols = bottom[:, 0]
+        # find where the bottom columns go beyond the maximum column (x value) from the front outline
         extra_cols = list(np.where(bot_cols > np.amax(front[:, 0]))[0])
         extra_bit = bottom[extra_cols]
         hybrid = np.vstack((front, extra_bit))
+        print("Using hybrid")
     return hybrid
 
 
@@ -278,7 +297,7 @@ def get_height_length_ratio(
     return ratio
 
 
-def get_distance_parameter(outline, px_per_cm=36.4):
+def get_distance_parameter(outline: np.ndarray, px_per_cm: float) -> np.ndarray:
     """
     Use the outline to construct a distance parameter.
 
@@ -292,7 +311,7 @@ def get_distance_parameter(outline, px_per_cm=36.4):
         how many pixels that distance takes up.
 
     Returns
-    ------
+    -------
     distance : np.ndarray
         This array contains the distance between the outline points (in cm).
     """
@@ -302,13 +321,13 @@ def get_distance_parameter(outline, px_per_cm=36.4):
     return distance
 
 
-def get_interp_points(distance, num_points: int = 15):
+def get_interp_points(distance, num_points: int = 50):
     """Get the points I will do the interpolation on."""
     interp_points = np.linspace(distance.min(), distance.max(), num_points)
     return interp_points
 
 
-def get_interpolation(distance: np.ndarray, outline: np.ndarray, num_points: int = 15):
+def get_interpolation(distance: np.ndarray, outline: np.ndarray, num_points: int = 50):
     """Get the interpolation of the line."""
     interpolator = interp1d(distance, outline, kind="cubic", axis=0)
     interp_points = get_interp_points(distance, num_points)
@@ -463,9 +482,6 @@ def compute_curvature(
     dy_dt = np.gradient(y, spacing)
     d2x_dt = np.gradient(dx_dt, spacing)
     d2y_dt = np.gradient(dy_dt, spacing)
-    # kappa = np.abs(dx_dt * d2y_dt - d2x_dt * dy_dt) / (
-    #     np.power(dx_dt**2 + dy_dt**2, 3 / 2)
-    # )
     kappa = (dx_dt * d2y_dt - d2x_dt * dy_dt) / (
         np.power(dx_dt**2 + dy_dt**2, 3 / 2)
     )  # move to computing signed curvature
@@ -479,3 +495,139 @@ def compute_curvature(
     )
     smooth_kappa = smooth_interp(smooth_points)
     return smooth_kappa, smooth_points, smooth_interp
+
+
+def find_unique(arr1: np.ndarray, arr2: np.ndarray) -> list:
+    """
+    Find the values in a that are not in b and return a list of the values.
+
+    Parameters
+    ----------
+    arr1 : np.ndarray
+
+    arr2 : np.ndarray
+
+    Returns
+    -------
+    unique_to_arr1 : list
+        A list of the unique values in arr1 that are not in arr2.
+    """
+    set1 = set(arr1)
+    set2 = set(arr2)
+    diff = set1 - set2
+    unique_to_arr1 = list(diff)
+    return unique_to_arr1
+
+
+def get_idx_of_vals(arr: np.ndarray, vals: list) -> list:
+    """
+    Get the indices of specific values of an array and return them in a list.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+
+    vals : list
+        List of values in arr I want to know the index of.
+
+    Returns
+    -------
+    idxs : list
+        List of indexes where the values are.
+    """
+    idxs = []
+    for val in vals:
+        idx = np.where(arr == val)[0][0]
+        idxs.append(idx)
+    return idxs
+
+
+def stack_and_sort_2d(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
+    """
+    Stack two 2d arrays and sort the values by the first column.
+
+    Break ties in the first column by the value in the second column.
+
+    Parameters
+    ----------
+    arr1 : np.ndarray
+        Shape (n, 2) array.
+    arr2 : np.ndarray
+        Shape (m, 2) array.
+
+    Returns
+    -------
+    stacked_sorted : np.ndarray
+        Shape (n+m, 2) array sorted by value in the first column. If there are
+        equal column values, then sort by the value in the second column.
+    """
+    stacked = np.vstack((arr1, arr2))
+    # sorted = np.sort(stacked, axis=0)
+    return stacked
+
+
+def find_unique_and_stack(front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
+    """
+    Find the points in the bottom that are not in the front and add them in.
+
+    The bottom and front outlines will not have the same points. Here I am
+    adding in the missed bottom points to the front outline.
+
+    Parameters
+    ----------
+    front : np.ndarray
+        Shape (n, 2) array.
+    bottom : np.ndarray
+        Shape (m, 2) array.
+
+    Returns
+    -------
+    hybrid : np.ndarray
+        Shape (n + x, 2) array where x is the number of columns in the bottom
+        that are not included in the front.
+    """
+    unique_to_bottom = find_unique(bottom[:, 0], front[:, 0])
+    unique_idxs = get_idx_of_vals(arr=bottom, vals=unique_to_bottom)
+    unique_arr = bottom[unique_idxs]
+    hybrid = stack_and_sort_2d(front, unique_arr)
+    return hybrid
+
+
+def new_hybridize(
+    front: np.ndarray, bottom: np.ndarray, reaching_num: float
+) -> np.ndarray:
+    """
+    Smartly combine the images of the front and the bottom.
+
+    If the snake is leaning down, use the bottom outline. Otherwise
+    combine the front and the bottom for a full view.
+    """
+
+    front_says_down = leaning_down(front, bottom)
+    leaning = leaning_backwards(bottom)
+    reaching_high = tilted_high(front, tilt_px=reaching_num)
+
+    # First deal with downward leaning snake
+    if front_says_down or not reaching_high:
+        hybrid = bottom
+        print("using bottom")
+        return hybrid
+    elif leaning:
+        try:
+            hybrid = leaning_fill_gap(front=front, bottom=bottom)
+            print("Filling gap")
+            return hybrid
+        except:
+            print("there was a problem with the hybridization")
+            hybrid = front
+            return hybrid
+    else:
+        # the columns where there is nothing from the front, add in the bottom
+        hybrid = find_unique_and_stack(front=front, bottom=bottom)
+        # x, y = hybrid[:, 0], hybrid[:, 1]
+        # xnew = np.linspace(x.min(), x.max(), num = 500)
+        # ynew = np.interp(xnew, x, y)
+        # processed_hybrid = np.array(list(zip(xnew, ynew))) # hybridizing so the new array
+        # does not contain repeat values on both dimensions.
+        print("Using front and bottom")
+    return hybrid

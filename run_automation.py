@@ -1,3 +1,7 @@
+""""
+Deprecated. This script automates the process of running the image analysis
+and post processing on each video directory.
+"""
 import os
 import re
 import subprocess
