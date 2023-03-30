@@ -5,7 +5,7 @@ the shape of the front of the snake.
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
-import skimage
+from skimage.io import imshow, imread
 from skimage.util import invert
 
 
@@ -24,7 +24,7 @@ def plot_img(img: np.ndarray, size: int = 6) -> None:
     -------
     """
     plt.figure(figsize=(size, size))
-    skimage.io.imshow(img, cmap="gray")
+    imshow(img, cmap="gray")
     plt.show()
 
 
@@ -43,7 +43,7 @@ def load_and_plot(img_path: str) -> np.ndarray:
     img : np.ndarray
         Inverted image array.
     """
-    img = skimage.io.imread(img_path)
+    img = imread(img_path)
     img = invert(img)
     img = make_truly_bw(img)
     plot_img(img)
@@ -54,7 +54,7 @@ def load_img(img_path: str) -> np.ndarray:
     """
     Load the image and make it black and white.
     """
-    img = skimage.io.imread(img_path)
+    img = imread(img_path)
     img = invert(img)
     img = make_truly_bw(img)
     return img
@@ -562,8 +562,9 @@ def stack_and_sort_2d(arr1: np.ndarray, arr2: np.ndarray) -> np.ndarray:
         equal column values, then sort by the value in the second column.
     """
     stacked = np.vstack((arr1, arr2))
-    # sorted = np.sort(stacked, axis=0)
-    return stacked
+    stacked_sorted = sorted(list(stacked), key=lambda x: (x[0], x[1]))
+    stacked_sorted = np.array(stacked_sorted)
+    return stacked_sorted
 
 
 def find_unique_and_stack(front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
@@ -604,7 +605,7 @@ def new_hybridize(
     """
 
     front_says_down = leaning_down(front, bottom)
-    leaning = leaning_backwards(bottom)
+    leaning_back = leaning_backwards(bottom)
     reaching_high = tilted_high(front, tilt_px=reaching_num)
 
     # First deal with downward leaning snake
@@ -612,7 +613,7 @@ def new_hybridize(
         hybrid = bottom
         print("using bottom")
         return hybrid
-    elif leaning:
+    elif leaning_back:
         try:
             hybrid = leaning_fill_gap(front=front, bottom=bottom)
             print("Filling gap")
@@ -622,12 +623,84 @@ def new_hybridize(
             hybrid = front
             return hybrid
     else:
-        # the columns where there is nothing from the front, add in the bottom
-        hybrid = find_unique_and_stack(front=front, bottom=bottom)
-        # x, y = hybrid[:, 0], hybrid[:, 1]
-        # xnew = np.linspace(x.min(), x.max(), num = 500)
-        # ynew = np.interp(xnew, x, y)
-        # processed_hybrid = np.array(list(zip(xnew, ynew))) # hybridizing so the new array
-        # does not contain repeat values on both dimensions.
-        print("Using front and bottom")
+        # comment this better. But building the snake up using the next closest
+        # point. Starting from the top and working down.
+        hybrid = np.vstack((front, bottom))
+        hybrid = list(hybrid)
+        hybrid = list(map(lambda x: tuple(x), hybrid))
+        hybrid = set(hybrid)
+        top_down_hybrid = sorted(list(hybrid), key=lambda x: x[1])
+        top = top_down_hybrid[0]
+        snake_build = [top]
+        i = 0
+        while len(top_down_hybrid) > 1:
+            current_point = snake_build[i]
+            # look at the remaining part of the snake only
+            top_down_hybrid.remove(current_point)
+            # calculate distance to every point in the snake (except the current point)
+            dists_to_current_point = compute_dist_to_point(
+                point=current_point, 
+                point_list=top_down_hybrid
+            )
+            # find the index of the closest point
+            idx_of_closes_point = dists_to_current_point.argmin()
+            # select that point and make it the next part of the snake build
+            next_point = top_down_hybrid[idx_of_closes_point]
+            snake_build.append(next_point)
+            i+=1
+        hybrid = np.array(snake_build)
+    return hybrid
+
+def compute_dist_to_point(point: tuple, point_list: list) -> np.ndarray:
+    """
+    Compute the distance between all elements of an array and a given point
+    
+    Parameters
+    ----------
+    point : tuple
+        (x, y)
+    point_list : list
+        List of tuples with (x, y) coordinates.
+    
+    Returns
+    -------
+    dists : np.ndarray
+        Array of distances.
+    """
+    point = np.array(point)
+    point_arr = np.array(point_list)
+    dists = [np.linalg.norm(point - other_point) for other_point in point_arr]
+    dists = np.array(dists)
+    return dists
+
+def join_de_dup_sort(front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
+    """
+    Combine the front and bottom and de duplicate points then sort the result.
+
+    Parameters
+    ----------
+    front : np.ndarray
+        (m, 2) array containing the front outline.
+    back : np.ndarray
+        (n, 2) array containing the back outline.
+
+    Returns
+    -------
+    hybrid : np.ndarray
+        (m + x, 2) array containing the hybrid outline. x depends on the number
+        of unique columns in the front/back.
+    """
+    # combine and make into a list
+    hybrid = np.vstack((front, bottom))
+    hybrid = list(hybrid)
+    # de duplicate points by converting the list to a set. Have to turn arrays
+    # into tuples first.
+    hybrid = list(map(lambda x: tuple(x), hybrid))
+    hybrid = set(hybrid)
+    # move back to a list and sort by the value in the first column
+    hybrid = list(hybrid)
+    # hybrid = sorted(hybrid, key=lambda x: (x[0], x[1]))
+    # convert back to an array
+    hybrid = list(map(lambda x: np.array(x), hybrid))
+    hybrid = np.array(hybrid)
     return hybrid
