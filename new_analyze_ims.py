@@ -51,28 +51,40 @@ files = sorted(files, key=extract_nums_from_str)
 
 
 i = 0
-num_points = 25
+num_points = 15  # I have changed this based on trial length
+# for the 70 cm trials I used 25 interpolation points and for the 29 cm trial
+# I used 15 interpolation points. The problem is that the images are pixelated
+# so when I use too many interpolation points I get noise from pixelation. On
+# the other hand if I use too few interpolation points and the snake is long,
+# then I have an interpolation which is too rough and doesn't capture the
+# curvature of the snake. This is a problem that I do not know the solution to
+# at the moment. It would be nice to use the same value everywhere but the
+# results are nicer and make some more sense with a variable number of
+# interpolation points.
 for im_file in tqdm(files):
     os.mkdir(ims_path + f"/extracted_data_signed/{i}")
     img = vh.load_img(img_path=im_file)
     front = vh.extract_front(img)
     bottom = vh.extract_bottom(img)
-    hybrid = vh.hybridize(img, front, bottom, reaching_num=reaching_px)
+    hybrid = vh.hybridize(front=front, bottom=bottom, reaching_num=reaching_px)
     distance = vh.get_distance_parameter(outline=hybrid, px_per_cm=px_per_cm)
-    interpolated_line, interpolator = vh.get_interpolation(
-        distance, hybrid, num_points=num_points
+    interp_points, interpolated_outline, outline_interp = vh.get_outline_interpolation(
+        distance=distance, outline=hybrid, num_points=num_points
     )
-    interpolation_points = vh.get_interp_points(
-        distance=distance, num_points=num_points
+    (
+        smooth_kappa,
+        curvature_interp_pts,
+        curvature_interpolator,
+    ) = vh.get_curvature_interpolation(
+        interpolated_outline=interpolated_outline,
+        interpolation_points=interp_points,
+        px_per_cm=px_per_cm,
     )
-    smooth_kappa, smooth_points, smooth_interp = vh.compute_curvature(
-        interpolated_line, interpolation_points, px_per_cm=px_per_cm
-    )
+    # save the curvature interpolator and the points I do the interpolation at.
     with open(save_folder + f"/{i}/interpolator.pkl", "wb") as f:
-        pickle.dump(smooth_interp, f)
-        # pickle.dump(interpolator, f)
+        pickle.dump(curvature_interpolator, f)
     np.savez(
         save_folder + f"/{i}/arr",
-        smooth_points,
+        curvature_interp_pts,
     )
     i += 1

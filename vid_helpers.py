@@ -230,7 +230,9 @@ def leaning_fill_gap(front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
     return hybrid
 
 
-def hybridize(front: np.ndarray, bottom: np.ndarray, reaching_num: int) -> np.ndarray:
+def old_hybridize(
+    front: np.ndarray, bottom: np.ndarray, reaching_num: int
+) -> np.ndarray:
     """
     Smartly combine the images of the front and the bottom.
 
@@ -321,24 +323,45 @@ def get_distance_parameter(outline: np.ndarray, px_per_cm: float) -> np.ndarray:
     return distance
 
 
-def get_interp_points(distance, num_points: int = 50):
-    """Get the points I will do the interpolation on."""
-    interp_points = np.linspace(distance.min(), distance.max(), num_points)
-    return interp_points
+def get_outline_interpolation(
+    distance: np.ndarray, outline: np.ndarray, num_points: int = 50
+) -> tuple:
+    """
+    Interpolate the outline of the snake.
 
+    Go from the points that I have defining the outline of the snake to an
+    interpolation of those points. Return the points I do the interpolation
+    on, the interpolated line itself, and the interpolation function.
 
-def get_interpolation(distance: np.ndarray, outline: np.ndarray, num_points: int = 50):
-    """Get the interpolation of the line."""
+    Parameters
+    ----------
+    distance : np.ndarray
+        1D array. Distance along the snake. Starts at 0 and ends at the snake
+        length.
+    outline : np.ndarray
+        2D array containing the hybrid outline of the snake.
+    num_points : int
+        Number of points I want in the interpolation.
+
+    Returns
+    -------
+    interp_points : np.ndarray
+        1D array. Points where the interpolation is done.
+    interpolated_outline : np.ndarray
+        2D array. Outline that is created by the interpolator.
+    interpolator : scipy.interpolate._interpolate.interp1d
+        Object which computes the interpolated value given an input.
+    """
     interpolator = interp1d(distance, outline, kind="cubic", axis=0)
-    interp_points = get_interp_points(distance, num_points)
-    interpolated_line = interpolator(interp_points)
-    return interpolated_line, interpolator
+    interp_points = np.linspace(distance.min(), distance.max(), num=num_points)
+    interpolated_outline = interpolator(interp_points)
+    return interp_points, interpolated_outline, interpolator
 
 
-def plot_interpolated_line(
+def plot_interpolated_outline(
     cropped: np.ndarray,
     outline: np.ndarray,
-    interpolated_line: np.ndarray,
+    interpolated_outline: np.ndarray,
     size: int = 8,
 ):
     """
@@ -360,7 +383,7 @@ def plot_interpolated_line(
     plt.figure(figsize=(size, size))
     plt.imshow(cropped, cmap="gray")
     plt.scatter(outline[:, 0], outline[:, 1], s=2, color="red")
-    plt.plot(interpolated_line[:, 0], interpolated_line[:, 1], linewidth=2)
+    plt.plot(interpolated_outline[:, 0], interpolated_outline[:, 1], linewidth=2)
     plt.title("Overlay of interpolated line")
     plt.show()
 
@@ -402,63 +425,17 @@ def check_parameterization(
     return proper
 
 
-def compute_plot_curvature(
-    interpolated_line: np.ndarray,
+def get_curvature_interpolation(
+    interpolated_outline: np.ndarray,
     interpolation_points: np.ndarray,
-    px_per_cm: float = 36.4,
-) -> np.ndarray:
+    px_per_cm: float,
+) -> tuple:
     """
-    Compute and plot the curvature.
+    Compute and create an interpolation of the curvature along the snake.
 
-    We compute and plot the curvature of the fit line after some smoothing.
-
-    Parameters
-    ----------
-    interpolated_line : np.ndarray
-        A 2D array containing the x, y pixel values of the interpolation.
-    interpolation_points : np.ndarray
-        Array containing the points we will do the interpolation at.
-
-    Returns
-    -------
-    smooth_kappa : np.ndarray
-        Array containing the curvature at several points along the snake.
-    """
-    x = interpolated_line[:, 0] / px_per_cm
-    y = interpolated_line[:, 1] / px_per_cm
-    t = interpolation_points
-    spacing = np.diff(t)[0]
-    dx_dt = np.gradient(x, spacing)
-    dy_dt = np.gradient(y, spacing)
-    d2x_dt = np.gradient(dx_dt, spacing)
-    d2y_dt = np.gradient(dy_dt, spacing)
-    kappa = np.abs(dx_dt * d2y_dt - d2x_dt * dy_dt) / (
-        np.power(dx_dt**2 + dy_dt**2, 3 / 2)
-    )
-    smooth_interp = interp1d(interpolation_points, kappa, kind="cubic")
-    smooth_points = np.linspace(
-        interpolation_points.min(), interpolation_points.max(), 100
-    )
-    smooth_kappa = smooth_interp(smooth_points)
-    # plt.plot(interpolation_points, kappa, label="regular")
-    plt.plot(smooth_points, smooth_kappa)
-    plt.xlabel("Distance along snake (cm)", fontsize=15)
-    plt.ylabel(r"Curvature $\kappa$ ($cm^{-1}$)", fontsize=15)
-    # plt.legend()
-    plt.title("Curvature along the snake.")
-    plt.show()
-    return smooth_kappa, smooth_points
-
-
-def compute_curvature(
-    interpolated_line: np.ndarray,
-    interpolation_points: np.ndarray,
-    px_per_cm: float = 36.4,
-) -> np.ndarray:
-    """
-    Compute and plot the curvature.
-
-    We compute and plot the curvature of the fit line after some smoothing.
+    First compute the curvature along the snake and then create a function
+    which interpolates. After that, compute the curvature at a large number of
+    points along the snake to get smooth view of what curvature looks like.
 
     Parameters
     ----------
@@ -473,9 +450,15 @@ def compute_curvature(
     -------
     smooth_kappa : np.ndarray
         Array containing the curvature at several points along the snake.
+    curvature_interp_points : np.ndarray
+        Large number of points where I am doing the interpolatiom at to get a
+        view of what the curvature looks like along the snake.
+    curvature_interpolator : scipy.interpolate._interpolate.interp1d
+        Interpolating function which computes the curvature given a point in
+        the domain.
     """
-    x = interpolated_line[:, 0] / px_per_cm
-    y = interpolated_line[:, 1] / px_per_cm
+    x = interpolated_outline[:, 0] / px_per_cm
+    y = interpolated_outline[:, 1] / px_per_cm
     t = interpolation_points
     spacing = np.diff(t)[0]
     dx_dt = np.gradient(x, spacing)
@@ -484,17 +467,18 @@ def compute_curvature(
     d2y_dt = np.gradient(dy_dt, spacing)
     kappa = (dx_dt * d2y_dt - d2x_dt * dy_dt) / (
         np.power(dx_dt**2 + dy_dt**2, 3 / 2)
-    )  # move to computing signed curvature
-    smooth_interp = interp1d(
-        interpolation_points, kappa, kind="cubic", fill_value=89, bounds_error=False
     )
-    smooth_points = np.linspace(
+    curvature_interpolator = interp1d(
+        x=t, y=kappa, kind="cubic", fill_value=89, bounds_error=False
+    )  # fill with 89 is dumb but helpful when I go to make kymographs. I use it
+    # to identify where there is no data.
+    curvature_interp_points = np.linspace(
         interpolation_points.min(),
         interpolation_points.max(),
         100,
     )
-    smooth_kappa = smooth_interp(smooth_points)
-    return smooth_kappa, smooth_points, smooth_interp
+    smooth_kappa = curvature_interpolator(curvature_interp_points)
+    return smooth_kappa, curvature_interp_points, curvature_interpolator
 
 
 def find_unique(arr1: np.ndarray, arr2: np.ndarray) -> list:
@@ -594,9 +578,7 @@ def find_unique_and_stack(front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
     return hybrid
 
 
-def new_hybridize(
-    front: np.ndarray, bottom: np.ndarray, reaching_num: float
-) -> np.ndarray:
+def hybridize(front: np.ndarray, bottom: np.ndarray, reaching_num: float) -> np.ndarray:
     """
     Smartly combine the images of the front and the bottom.
 
@@ -611,19 +593,17 @@ def new_hybridize(
     # First deal with downward leaning snake
     if front_says_down or not reaching_high:
         hybrid = bottom
-        print("using bottom")
         return hybrid
     elif leaning_back:
         try:
             hybrid = leaning_fill_gap(front=front, bottom=bottom)
-            print("Filling gap")
             return hybrid
         except:
             print("there was a problem with the hybridization")
             hybrid = front
             return hybrid
     else:
-        # comment this better. But building the snake up using the next closest
+        # comment this better. Building the snake up using the next closest
         # point. Starting from the top and working down.
         hybrid = np.vstack((front, bottom))
         hybrid = list(hybrid)
@@ -639,29 +619,29 @@ def new_hybridize(
             top_down_hybrid.remove(current_point)
             # calculate distance to every point in the snake (except the current point)
             dists_to_current_point = compute_dist_to_point(
-                point=current_point, 
-                point_list=top_down_hybrid
+                point=current_point, point_list=top_down_hybrid
             )
             # find the index of the closest point
             idx_of_closes_point = dists_to_current_point.argmin()
             # select that point and make it the next part of the snake build
             next_point = top_down_hybrid[idx_of_closes_point]
             snake_build.append(next_point)
-            i+=1
+            i += 1
         hybrid = np.array(snake_build)
     return hybrid
+
 
 def compute_dist_to_point(point: tuple, point_list: list) -> np.ndarray:
     """
     Compute the distance between all elements of an array and a given point
-    
+
     Parameters
     ----------
     point : tuple
         (x, y)
     point_list : list
         List of tuples with (x, y) coordinates.
-    
+
     Returns
     -------
     dists : np.ndarray
@@ -672,6 +652,7 @@ def compute_dist_to_point(point: tuple, point_list: list) -> np.ndarray:
     dists = [np.linalg.norm(point - other_point) for other_point in point_arr]
     dists = np.array(dists)
     return dists
+
 
 def join_de_dup_sort(front: np.ndarray, bottom: np.ndarray) -> np.ndarray:
     """
