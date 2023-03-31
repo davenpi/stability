@@ -51,7 +51,7 @@ files = sorted(files, key=extract_nums_from_str)
 
 
 i = 0
-num_points = 15  # I have changed this based on trial length
+num_points = 25  # I have changed this based on trial length
 # for the 70 cm trials I used 25 interpolation points and for the 29 cm trial
 # I used 15 interpolation points. The problem is that the images are pixelated
 # so when I use too many interpolation points I get noise from pixelation. On
