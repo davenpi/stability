@@ -68,7 +68,7 @@ def optimal_snake(
     dx_ds = ca.cos(theta)
     dy_ds = ca.sin(theta)
     dtheta_ds = theta_prime
-    d2theta_ds = alpha * (s - 1)*ca.cos(theta) - u
+    d2theta_ds = alpha * (s - 1) * ca.cos(theta) - u
     xdot = ca.vertcat(
         ds_ds,
         dx_ds,
@@ -81,9 +81,7 @@ def optimal_snake(
     L = u**2
 
     # Define the casadi function we will pass to the solver.
-    f = ca.Function(
-        "f", [state, u], [xdot, L], ["state", "u"], ["xdot", "L"]
-    )
+    f = ca.Function("f", [state, u], [xdot, L], ["state", "u"], ["xdot", "L"])
 
     # initial state
     x0 = [0, 0, 0, 0, 0]
